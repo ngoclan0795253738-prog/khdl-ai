@@ -8,12 +8,15 @@
     <style>
         body { background-color: #f8f9fa; }
         .container { max-width: 1200px; }
-        .card { box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
-        .btn-custom { background: linear-gradient(45deg, #4CAF50, #45a049); border: none; }
-        .btn-custom:hover { background: linear-gradient(45deg, #45a049, #4CAF50); }
-        .table-responsive { max-height: 400px; overflow-y: auto; }
-        .upload-section { background: #fff; padding: 20px; border-radius: 10px; margin-bottom: 20px; }
+        .card { box-shadow: 0 4px 18px rgba(0,0,0,0.08); border: none; }
+        .btn-custom { background: linear-gradient(45deg, #0d6efd, #6610f2); color: #fff; border: none; }
+        .btn-custom:hover { background: linear-gradient(45deg, #6610f2, #0d6efd); }
+        .table-responsive { max-height: 420px; overflow-y: auto; }
+        .upload-section { background: #fff; padding: 24px; border-radius: 18px; margin-bottom: 24px; }
+        .section-title { letter-spacing: 0.02em; }
+        .advice-list li { margin-bottom: 10px; }
     </style>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
     <div class="container mt-5">
@@ -26,7 +29,7 @@
             <div id="uploadStatus" class="mt-3"></div>
         </div>
 
-        <div class="card p-4 mb-4" style="display: none;" id="formCard">
+        <div class="card p-4 mb-4" id="formCard">
             <h3>Nhập Dữ Liệu Thủ Công</h3>
             <form id="fraudForm" class="row g-3">
                 <div class="col-md-6">
@@ -89,6 +92,32 @@
         </div>
 
         <div id="result" class="alert alert-info mt-3" style="display: none;"></div>
+
+        <div class="row g-4 mb-4">
+            <div class="col-lg-6">
+                <div class="card p-4 h-100">
+                    <h3 class="section-title">Biểu đồ đánh giá mức độ rủi ro</h3>
+                    <canvas id="riskChart" height="250"></canvas>
+                </div>
+            </div>
+            <div class="col-lg-6">
+                <div class="card p-4 h-100">
+                    <h3 class="section-title">Biểu đồ độ tin cậy</h3>
+                    <canvas id="trustChart" height="250"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <div class="card p-4 mb-4">
+            <h3 class="section-title">Lời khuyên dành cho khách hàng</h3>
+            <ul id="adviceList" class="advice-list mb-0">
+                <li>Ưu tiên kiểm tra các mẫu dữ liệu `High Risk` và `Anomaly` để xác định nguyên nhân tài chính thực sự.</li>
+                <li>Tập trung vào tỷ lệ thanh khoản và tỷ lệ nợ/vốn trước khi quyết định đầu tư.</li>
+                <li>Sử dụng nhiều chỉ số để đánh giá thay vì chỉ dựa vào một chỉ số đơn lẻ.</li>
+                <li>Áp dụng các kỹ thuật phân tích chịu nhiễu khi dữ liệu có nhiều giá trị ngoại lai.</li>
+                <li>Kiểm tra chéo với báo cáo gốc để xác định các dữ liệu `Anomaly` có phải do lỗi nhập hay do tình huống kinh doanh đặc thù.</li>
+            </ul>
+        </div>
 
         <div class="card p-4">
             <h3>Dữ Liệu Đã Xử Lý</h3>
@@ -153,40 +182,149 @@
             return data;
         }
 
+        let riskChart = null;
+        let trustChart = null;
+
+        function initCharts() {
+            const riskCtx = document.getElementById('riskChart');
+            const trustCtx = document.getElementById('trustChart');
+
+            riskChart = new Chart(riskCtx, {
+                type: 'bar',
+                data: {
+                    labels: ['Normal', 'High Risk', 'Anomaly'],
+                    datasets: [{
+                        label: 'Số lượng hồ sơ',
+                        data: [0, 0, 0],
+                        backgroundColor: ['#198754', '#dc3545', '#ffc107']
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: { legend: { display: false } },
+                    scales: { y: { beginAtZero: true, title: { display: true, text: 'Số lượng' } } }
+                }
+            });
+
+            trustChart = new Chart(trustCtx, {
+                type: 'doughnut',
+                data: {
+                    labels: ['Tin cậy', 'Không tin cậy'],
+                    datasets: [{
+                        data: [0, 100],
+                        backgroundColor: ['#0d6efd', '#adb5bd']
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: { position: 'bottom' },
+                        tooltip: { callbacks: { label: ctx => ctx.label + ': ' + ctx.parsed + '%' } }
+                    }
+                }
+            });
+        }
+
+        function updateCharts(statusCounts) {
+            if (riskChart) {
+                riskChart.data.datasets[0].data = [
+                    statusCounts.Normal || 0,
+                    statusCounts['High Risk'] || 0,
+                    statusCounts.Anomaly || 0
+                ];
+                riskChart.update();
+            }
+
+            if (trustChart) {
+                const total = (statusCounts.Normal || 0) + (statusCounts['High Risk'] || 0) + (statusCounts.Anomaly || 0);
+                const trustValue = total ? Math.round((statusCounts.Normal || 0) / total * 100) : 0;
+                trustChart.data.datasets[0].data = [trustValue, 100 - trustValue];
+                trustChart.update();
+            }
+        }
+
+        function computeDashboard(data) {
+            const counts = { Normal: 0, 'High Risk': 0, Anomaly: 0 };
+            data.forEach(row => {
+                let status = row['Financial_Status'];
+                if (!status) {
+                    const values = [
+                        parseFloat(row['Total_Assets']) || 0,
+                        parseFloat(row['Total_Liabilities']) || 0,
+                        parseFloat(row['Revenue']) || 0,
+                        parseFloat(row['Operating_Expenses']) || 0,
+                        parseFloat(row['Net_Income']) || 0,
+                        parseFloat(row['Cash_Flow_Operating']) || 0,
+                        parseFloat(row['Cash_Flow_Investing']) || 0,
+                        parseFloat(row['Cash_Flow_Financing']) || 0,
+                        parseFloat(row['Current_Ratio']) || 0,
+                        parseFloat(row['Debt_to_Equity']) || 0,
+                        parseFloat(row['Gross_Margin']) || 0,
+                        parseFloat(row['Return_on_Assets']) || 0,
+                        parseFloat(row['Return_on_Equity']) || 0
+                    ];
+                    status = detectFraud(values);
+                }
+                counts[status] = (counts[status] || 0) + 1;
+            });
+            updateCharts(counts);
+        }
+
         // Hiển thị dữ liệu
         function displayData(data) {
             const dataBody = document.getElementById('dataBody');
             dataBody.innerHTML = '';
             data.forEach((row, index) => {
                 const tr = document.createElement('tr');
+                const status = row['Financial_Status'] || 'Chưa kiểm tra';
                 const values = [
                     row['Total_Assets'], row['Total_Liabilities'], row['Revenue'], row['Operating_Expenses'],
                     row['Net_Income'], row['Cash_Flow_Operating'], row['Cash_Flow_Investing'], row['Cash_Flow_Financing'],
                     row['Current_Ratio'], row['Debt_to_Equity'], row['Gross_Margin'], row['Return_on_Assets'], row['Return_on_Equity'],
-                    row['Financial_Status'] || 'Chưa kiểm tra'
+                    status
                 ];
-                values.forEach(cell => {
+                values.forEach((cell, i) => {
                     const td = document.createElement('td');
                     td.textContent = cell;
+                    if (i === 13) {
+                        td.className = status === 'High Risk' ? 'text-danger' : status === 'Anomaly' ? 'text-warning' : 'text-success';
+                    }
                     tr.appendChild(td);
                 });
-                // Thêm nút kiểm tra
                 const actionTd = document.createElement('td');
                 const checkBtn = document.createElement('button');
                 checkBtn.className = 'btn btn-sm btn-outline-primary';
                 checkBtn.textContent = 'Kiểm Tra';
                 checkBtn.onclick = () => {
-                    const dataArray = values.slice(0, 13).map(v => parseFloat(v) || 0);
-                    const status = detectFraud(dataArray);
-                    values[13] = status;
-                    tr.cells[13].textContent = status;
-                    tr.cells[13].className = status === 'High Risk' ? 'text-danger' : status === 'Anomaly' ? 'text-warning' : 'text-success';
+                    const dataArray = [
+                        parseFloat(row['Total_Assets']) || 0,
+                        parseFloat(row['Total_Liabilities']) || 0,
+                        parseFloat(row['Revenue']) || 0,
+                        parseFloat(row['Operating_Expenses']) || 0,
+                        parseFloat(row['Net_Income']) || 0,
+                        parseFloat(row['Cash_Flow_Operating']) || 0,
+                        parseFloat(row['Cash_Flow_Investing']) || 0,
+                        parseFloat(row['Cash_Flow_Financing']) || 0,
+                        parseFloat(row['Current_Ratio']) || 0,
+                        parseFloat(row['Debt_to_Equity']) || 0,
+                        parseFloat(row['Gross_Margin']) || 0,
+                        parseFloat(row['Return_on_Assets']) || 0,
+                        parseFloat(row['Return_on_Equity']) || 0
+                    ];
+                    const newStatus = detectFraud(dataArray);
+                    row['Financial_Status'] = newStatus;
+                    tr.cells[13].textContent = newStatus;
+                    tr.cells[13].className = newStatus === 'High Risk' ? 'text-danger' : newStatus === 'Anomaly' ? 'text-warning' : 'text-success';
+                    computeDashboard(data);
                 };
                 actionTd.appendChild(checkBtn);
                 tr.appendChild(actionTd);
                 dataBody.appendChild(tr);
             });
+            computeDashboard(data);
         }
+
+        initCharts();
 
         // Upload file
         document.getElementById('uploadBtn').addEventListener('click', function() {
