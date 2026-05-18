@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Phát Hiện Gian Lận Báo Cáo Tài Chính</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body { background-color: #f8f9fa; }
+        .container { max-width: 1200px; }
+        .card { box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
+        .btn-custom { background: linear-gradient(45deg, #4CAF50, #45a049); border: none; }
+        .btn-custom:hover { background: linear-gradient(45deg, #45a049, #4CAF50); }
+        .table-responsive { max-height: 400px; overflow-y: auto; }
+        .upload-section { background: #fff; padding: 20px; border-radius: 10px; margin-bottom: 20px; }
+    </style>
+</head>
+<body>
+    <div class="container mt-5">
+        <h1 class="text-center mb-4">Phát Hiện Gian Lận Báo Cáo Tài Chính</h1>
+        
+        <div class="upload-section card">
+            <h3>Tải Lên File Dữ Liệu</h3>
+            <input type="file" id="csvFile" accept=".csv" class="form-control mb-3">
+            <button id="uploadBtn" class="btn btn-primary">Tải Lên và Xử Lý</button>
+            <div id="uploadStatus" class="mt-3"></div>
+        </div>
+
+        <div class="card p-4 mb-4" style="display: none;" id="formCard">
+            <h3>Nhập Dữ Liệu Thủ Công</h3>
+            <form id="fraudForm" class="row g-3">
+                <div class="col-md-6">
+                    <label for="assets" class="form-label">Tổng Tài Sản (Total Assets)</label>
+                    <input type="number" class="form-control" id="assets" step="0.01" required>
+                </div>
+                <div class="col-md-6">
+                    <label for="liabilities" class="form-label">Tổng Nợ (Total Liabilities)</label>
+                    <input type="number" class="form-control" id="liabilities" step="0.01" required>
+                </div>
+                <div class="col-md-6">
+                    <label for="revenue" class="form-label">Doanh Thu (Revenue)</label>
+                    <input type="number" class="form-control" id="revenue" step="0.01" required>
+                </div>
+                <div class="col-md-6">
+                    <label for="expenses" class="form-label">Chi Phí Vận Hành (Operating Expenses)</label>
+                    <input type="number" class="form-control" id="expenses" step="0.01" required>
+                </div>
+                <div class="col-md-6">
+                    <label for="income" class="form-label">Lợi Nhuận Ròng (Net Income)</label>
+                    <input type="number" class="form-control" id="income" step="0.01" required>
+                </div>
+                <div class="col-md-6">
+                    <label for="cashOp" class="form-label">Dòng Tiền Vận Hành (Cash Flow Operating)</label>
+                    <input type="number" class="form-control" id="cashOp" step="0.01" required>
+                </div>
+                <div class="col-md-6">
+                    <label for="cashInv" class="form-label">Dòng Tiền Đầu Tư (Cash Flow Investing)</label>
+                    <input type="number" class="form-control" id="cashInv" step="0.01" required>
+                </div>
+                <div class="col-md-6">
+                    <label for="cashFin" class="form-label">Dòng Tiền Tài Chính (Cash Flow Financing)</label>
+                    <input type="number" class="form-control" id="cashFin" step="0.01" required>
+                </div>
+                <div class="col-md-6">
+                    <label for="currentRatio" class="form-label">Tỷ Lệ Lưu Động (Current Ratio)</label>
+                    <input type="number" class="form-control" id="currentRatio" step="0.01" required>
+                </div>
+                <div class="col-md-6">
+                    <label for="debtEquity" class="form-label">Tỷ Lệ Nợ/Vốn (Debt to Equity)</label>
+                    <input type="number" class="form-control" id="debtEquity" step="0.01" required>
+                </div>
+                <div class="col-md-6">
+                    <label for="grossMargin" class="form-label">Biên Lợi Gộp (Gross Margin)</label>
+                    <input type="number" class="form-control" id="grossMargin" step="0.01" required>
+                </div>
+                <div class="col-md-6">
+                    <label for="roa" class="form-label">Lợi Nhuận Trên Tài Sản (Return on Assets)</label>
+                    <input type="number" class="form-control" id="roa" step="0.01" required>
+                </div>
+                <div class="col-md-6">
+                    <label for="roe" class="form-label">Lợi Nhuận Trên Vốn (Return on Equity)</label>
+                    <input type="number" class="form-control" id="roe" step="0.01" required>
+                </div>
+                <div class="col-12">
+                    <button type="submit" class="btn btn-custom">Kiểm Tra Gian Lận</button>
+                    <button id="runButton" class="btn btn-secondary ms-2">Run Code</button>
+                </div>
+            </form>
+        </div>
+
+        <div id="result" class="alert alert-info mt-3" style="display: none;"></div>
+
+        <div class="card p-4">
+            <h3>Dữ Liệu Đã Xử Lý</h3>
+            <div class="table-responsive">
+                <table class="table table-striped" id="dataTable">
+                    <thead>
+                        <tr>
+                            <th>Tổng Tài Sản</th>
+                            <th>Tổng Nợ</th>
+                            <th>Doanh Thu</th>
+                            <th>Chi Phí</th>
+                            <th>Lợi Nhuận</th>
+                            <th>Dòng Tiền Vận Hành</th>
+                            <th>Dòng Tiền Đầu Tư</th>
+                            <th>Dòng Tiền Tài Chính</th>
+                            <th>Tỷ Lệ Lưu Động</th>
+                            <th>Nợ/Vốn</th>
+                            <th>Biên Lợi Gộp</th>
+                            <th>ROA</th>
+                            <th>ROE</th>
+                            <th>Trạng Thái</th>
+                            <th>Hành Động</th>
+                        </tr>
+                    </thead>
+                    <tbody id="dataBody">
+                        <!-- Dữ liệu sẽ được thêm bằng JS -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Hàm phát hiện gian lận đơn giản
+        function detectFraud(data) {
+            const [assets, liabilities, revenue, expenses, income, cashOp, cashInv, cashFin, currentRatio, debtEquity, grossMargin, roa, roe] = data;
+            if (income < 0 && debtEquity > 0.5) {
+                return "High Risk";
+            } else if (currentRatio < 1 || roa < 0) {
+                return "Anomaly";
+            } else {
+                return "Normal";
+            }
+        }
+
+        // Parse CSV đơn giản
+        function parseCSV(csvText) {
+            const lines = csvText.trim().split('\n');
+            const headers = lines[0].split(',');
+            const data = [];
+            for (let i = 1; i < lines.length; i++) {
+                const values = lines[i].split(',');
+                if (values.length === headers.length) {
+                    const row = {};
+                    headers.forEach((header, index) => {
+                        row[header.trim()] = parseFloat(values[index].trim()) || values[index].trim();
+                    });
+                    data.push(row);
+                }
+            }
+            return data;
+        }
+
+        // Hiển thị dữ liệu
+        function displayData(data) {
+            const dataBody = document.getElementById('dataBody');
+            dataBody.innerHTML = '';
+            data.forEach((row, index) => {
+                const tr = document.createElement('tr');
+                const values = [
+                    row['Total_Assets'], row['Total_Liabilities'], row['Revenue'], row['Operating_Expenses'],
+                    row['Net_Income'], row['Cash_Flow_Operating'], row['Cash_Flow_Investing'], row['Cash_Flow_Financing'],
+                    row['Current_Ratio'], row['Debt_to_Equity'], row['Gross_Margin'], row['Return_on_Assets'], row['Return_on_Equity'],
+                    row['Financial_Status'] || 'Chưa kiểm tra'
+                ];
+                values.forEach(cell => {
+                    const td = document.createElement('td');
+                    td.textContent = cell;
+                    tr.appendChild(td);
+                });
+                // Thêm nút kiểm tra
+                const actionTd = document.createElement('td');
+                const checkBtn = document.createElement('button');
+                checkBtn.className = 'btn btn-sm btn-outline-primary';
+                checkBtn.textContent = 'Kiểm Tra';
+                checkBtn.onclick = () => {
+                    const dataArray = values.slice(0, 13).map(v => parseFloat(v) || 0);
+                    const status = detectFraud(dataArray);
+                    values[13] = status;
+                    tr.cells[13].textContent = status;
+                    tr.cells[13].className = status === 'High Risk' ? 'text-danger' : status === 'Anomaly' ? 'text-warning' : 'text-success';
+                };
+                actionTd.appendChild(checkBtn);
+                tr.appendChild(actionTd);
+                dataBody.appendChild(tr);
+            });
+        }
+
+        // Upload file
+        document.getElementById('uploadBtn').addEventListener('click', function() {
+            const fileInput = document.getElementById('csvFile');
+            const status = document.getElementById('uploadStatus');
+            if (!fileInput.files[0]) {
+                status.innerHTML = '<div class="alert alert-danger">Vui lòng chọn file CSV.</div>';
+                return;
+            }
+            const file = fileInput.files[0];
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const csvData = parseCSV(e.target.result);
+                    displayData(csvData);
+                    status.innerHTML = '<div class="alert alert-success">File đã được tải lên và xử lý thành công!</div>';
+                } catch (error) {
+                    status.innerHTML = '<div class="alert alert-danger">Lỗi khi xử lý file: ' + error.message + '</div>';
+                }
+            };
+            reader.readAsText(file);
+        });
+
+        // Xử lý form
+        document.getElementById('fraudForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            const assets = parseFloat(document.getElementById('assets').value);
+            const liabilities = parseFloat(document.getElementById('liabilities').value);
+            const revenue = parseFloat(document.getElementById('revenue').value);
+            const expenses = parseFloat(document.getElementById('expenses').value);
+            const income = parseFloat(document.getElementById('income').value);
+            const cashOp = parseFloat(document.getElementById('cashOp').value);
+            const cashInv = parseFloat(document.getElementById('cashInv').value);
+            const cashFin = parseFloat(document.getElementById('cashFin').value);
+            const currentRatio = parseFloat(document.getElementById('currentRatio').value);
+            const debtEquity = parseFloat(document.getElementById('debtEquity').value);
+            const grossMargin = parseFloat(document.getElementById('grossMargin').value);
+            const roa = parseFloat(document.getElementById('roa').value);
+            const roe = parseFloat(document.getElementById('roe').value);
+
+            const data = [assets, liabilities, revenue, expenses, income, cashOp, cashInv, cashFin, currentRatio, debtEquity, grossMargin, roa, roe];
+            const status = detectFraud(data);
+            const resultDiv = document.getElementById('result');
+            resultDiv.textContent = `Trạng Thái: ${status}`;
+            resultDiv.style.display = 'block';
+            resultDiv.className = status === 'High Risk' ? 'alert alert-danger' : status === 'Anomaly' ? 'alert alert-warning' : 'alert alert-success';
+        });
+
+        // Nút Run Code
+        document.getElementById('runButton').addEventListener('click', function() {
+            alert('Code is running! Phát hiện gian lận đang được thực thi.');
+        });
+    </script>
+</body>
+</html>
